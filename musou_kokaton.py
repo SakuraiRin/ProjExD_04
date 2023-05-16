@@ -227,6 +227,33 @@ class Enemy(pg.sprite.Sprite):
         self.rect.centery += self.vy
 
 
+class NeoGravity(pg.sprite.Sprite):
+    """
+    画面全体に生成される重力場に関するクラス
+    """
+    def __init__(self, life):
+        """
+        画面全体に重力場を生成する
+        引数 life：発動時間
+        """  
+        super().__init__()
+        self.image = pg.Surface((WIDTH, HEIGHT))
+        self.image.set_alpha(200)
+        self.image.set_colorkey((0, 0, 0))
+        pg.draw.rect(self.image, (10, 10, 10), pg.Rect(0, 0, WIDTH, HEIGHT))
+        self.rect = self.image.get_rect()
+        self.rect.center = WIDTH/2, HEIGHT/2
+        self.life = life
+
+    def update(self):
+        """
+        発動時間を1減算し，発動時間中は重力場を有効にする
+        """
+        self.life -= 1
+        if self.life < 0:
+            self.kill()
+
+
 class Score:
     """
     打ち落とした爆弾，敵機の数をスコアとして表示するクラス
@@ -260,6 +287,7 @@ def main():
     beams = pg.sprite.Group()
     exps = pg.sprite.Group()
     emys = pg.sprite.Group()
+    neogras = pg.sprite.Group()
 
     tmr = 0
     clock = pg.time.Clock()
@@ -270,6 +298,10 @@ def main():
                 return 0
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
                 beams.add(Beam(bird))
+            if event.type == pg.KEYDOWN and event.key == pg.K_RETURN:
+                if score.score > 200:
+                    neogras.add(NeoGravity(400))
+                    score.score_up(-200)
         screen.blit(bg_img, [0, 0])
 
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
@@ -289,6 +321,14 @@ def main():
             exps.add(Explosion(bomb, 50))  # 爆発エフェクト
             score.score_up(1)  # 1点アップ
 
+        for bomb in pg.sprite.groupcollide(bombs, neogras, True, False):
+            exps.add(Explosion(bomb, 50))  # 爆発エフェクト
+            score.score_up(1)  # 1点アップ
+        for emy in pg.sprite.groupcollide(emys, neogras, True, False):
+            exps.add(Explosion(emy, 100))  # 爆発エフェクト
+            score.score_up(10)  # 1点アップ
+            bird.change_img(6, screen)  # こうかとん喜びエフェクト
+
         if len(pg.sprite.spritecollide(bird, bombs, True)) != 0:
             bird.change_img(8, screen) # こうかとん悲しみエフェクト
             score.update(screen)
@@ -305,6 +345,8 @@ def main():
         bombs.draw(screen)
         exps.update()
         exps.draw(screen)
+        neogras.update()
+        neogras.draw(screen)
         score.update(screen)
         pg.display.update()
         tmr += 1
