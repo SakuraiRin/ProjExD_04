@@ -145,14 +145,14 @@ class Beam(pg.sprite.Sprite):
     """
     ビームに関するクラス
     """
-    def __init__(self, bird: Bird, angle0: float=0):
+    def __init__(self, bird: Bird):
         """
         ビーム画像Surfaceを生成する
         引数 bird：ビームを放つこうかとん
         """
         super().__init__()
         self.vx, self.vy = bird.get_direction()
-        angle = math.degrees(math.atan2(-self.vy, self.vx))+angle0
+        angle = math.degrees(math.atan2(-self.vy, self.vx))
         self.image = pg.transform.rotozoom(pg.image.load(f"ex04/fig/beam.png"), angle, 2.0)
         self.vx = math.cos(math.radians(angle))
         self.vy = -math.sin(math.radians(angle))
@@ -169,29 +169,6 @@ class Beam(pg.sprite.Sprite):
         self.rect.move_ip(+self.speed*self.vx, +self.speed*self.vy)
         if check_bound(self.rect) != (True, True):
             self.kill()
-
-
-class NeoBeam:
-    """
-    ネオビムに関するクラス
-    """
-    def __init__(self, bird: Bird, num: int):
-        """
-        引数1 bird：ビームを放つこうかとん
-        引数2 num：生成するビームの数
-        """
-        self.beams = list()
-        self.bird = bird
-        self.num = num
-
-    def gen_beams(self) -> list[Beam]:
-        """
-        複数方向のビームを生成する
-        """
-        vx, vy = self.bird.get_direction()
-        for angle in range(-50, +51, int(100/(self.num-1))):
-            self.beams.append(Beam(self.bird, angle))
-        return self.beams
 
 
 class Explosion(pg.sprite.Sprite):
@@ -250,6 +227,34 @@ class Enemy(pg.sprite.Sprite):
         self.rect.centery += self.vy
 
 
+class Gravity(pg.sprite.Sprite):
+    """
+    こうかとんを中心に生成される重力球に関するクラス
+    """
+    def __init__(self, bird:Bird, size:int, life:int):
+        """
+        birdを中心としたsizeの重力球を生成する
+        引数1 bird：重力球の中心となるこうかとん
+        引数2 size：重力球の大きさ（半径）
+        引数3 life：発動時間
+        """        
+        super().__init__()
+        self.image = pg.Surface((size, size))
+        self.image.set_alpha(200)
+        self.image.set_colorkey((0, 0, 0))
+        pg.draw.circle(self.image, (10, 10, 10), (size/2, size/2), size/2)
+        self.rect = self.image.get_rect(center=bird.rect.center)
+        self.life = life
+
+    def update(self):
+        """
+        発動時間を1減算し，発動時間中は重力球を有効にする
+        """
+        self.life -= 1
+        if self.life < 0:
+            self.kill()
+
+
 class Score:
     """
     打ち落とした爆弾，敵機の数をスコアとして表示するクラス
@@ -283,6 +288,7 @@ def main():
     beams = pg.sprite.Group()
     exps = pg.sprite.Group()
     emys = pg.sprite.Group()
+    gras = pg.sprite.Group()
 
     tmr = 0
     clock = pg.time.Clock()
@@ -291,10 +297,12 @@ def main():
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 return 0
-            if event.type == pg.KEYDOWN and event.key == pg.K_SPACE and key_lst[pg.K_LSHIFT]:
-                beams.add(NeoBeam(bird, 5).gen_beams())
-            elif event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
+            if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
                 beams.add(Beam(bird))
+            if event.type == pg.KEYDOWN and event.key == pg.K_TAB:
+                if score.score > 50:
+                    gras.add(Gravity(bird, 200, 500))
+                    score.score_up(-50)
         screen.blit(bg_img, [0, 0])
 
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
@@ -314,6 +322,10 @@ def main():
             exps.add(Explosion(bomb, 50))  # 爆発エフェクト
             score.score_up(1)  # 1点アップ
 
+        for bomb in pg.sprite.groupcollide(bombs, gras, True, False):
+            exps.add(Explosion(bomb, 50))  # 爆発エフェクト
+            score.score_up(1)  # 1点アップ
+
         if len(pg.sprite.spritecollide(bird, bombs, True)) != 0:
             bird.change_img(8, screen) # こうかとん悲しみエフェクト
             score.update(screen)
@@ -330,6 +342,8 @@ def main():
         bombs.draw(screen)
         exps.update()
         exps.draw(screen)
+        gras.update()
+        gras.draw(screen)
         score.update(screen)
         pg.display.update()
         tmr += 1
